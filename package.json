@@ -1,0 +1,27 @@
+{
+  "name": "redux-compact",
+  "version": "0.0.1-alpha.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maciekwawro/redux-compact.git"
+  },
+  "author": "Maciek Wawro",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/maciekwawro/redux-compact/issues"
+  },
+  "homepage": "https://github.com/maciekwawro/redux-compact#readme",
+  "devDependencies": {
+    "@types/jest": "^24.0.11",
+    "@types/redux": "^3.6.0",
+    "jest": "^24.5.0",
+    "redux": "^4.0.1",
+    "ts-jest": "^24.0.1",
+    "typescript": "^3.4.1"
+  }
+}

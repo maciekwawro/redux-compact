@@ -1,1 +1,1 @@
-# redux-concise
+# redux-compact
