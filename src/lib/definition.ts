@@ -1,4 +1,5 @@
 import * as Schema from './schema';
+import { ActionCreators } from './actionCreators';
 import { mapValues } from './util';
 
 type ReducersPayload<R> = {
@@ -16,6 +17,7 @@ export type Definition<S /* extends Schema.Schema */> = {
   reducers: {
     [K in keyof Schema.ReducerPayload<S>]: (state: Schema.State<S>, payload: Schema.ReducerPayload<S>[K]) => Schema.State<S>
   },
+  actions: Schema.Actions<S>,
   list: [Schema.ListOf<S>] extends [never] ? undefined : {
     of: Definition<Schema.ListOf<S>>,
     key: (item: Schema.State<Schema.ListOf<S>>) => string,
@@ -35,6 +37,7 @@ export class DefinitionWrapper<S /* extends Schema.Schema */> {
     reducerPayload: {
       [K in keyof (Schema.ReducerPayload<S> & ReducersPayload<R>)]: (Schema.ReducerPayload<S> & ReducersPayload<R>)[K]
     },
+    actions: Schema.Actions<S>,
     combines: Schema.Combines<S>,
     listOf: Schema.ListOf<S>,
   }> {
@@ -44,9 +47,25 @@ export class DefinitionWrapper<S /* extends Schema.Schema */> {
     } as any);
   }
 
+  addActionCreators<A extends {[key: string]: (this: ActionCreators<S>, ...args: any[]) => any}>(actions: A): DefinitionWrapper<{
+    state: Schema.State<S>,
+    reducerPayload: Schema.ReducerPayload<S>,
+    actions: {
+      [K in keyof (Schema.Actions<S> & A)]: (Schema.Actions<S> & A)[K]
+    },
+    combines: Schema.Combines<S>,
+    listOf: Schema.ListOf<S>
+  }> {
+    return new DefinitionWrapper({
+      ...this.definition,
+      actions: {...this.definition.actions, ...actions}
+    } as any);
+  }
+
   combineWith<C extends {[key: string]: DefinitionWrapper<any>}>(slices: C): DefinitionWrapper<{
     state: Schema.State<S>,
     reducerPayload: Schema.ReducerPayload<S>,
+    actions: Schema.Actions<S>,
     combines: {
       [K in keyof (Schema.Combines<S> & SliceSchemas<C>)]: (Schema.Combines<S> & SliceSchemas<C>)[K]
     },
@@ -64,8 +83,9 @@ export class DefinitionWrapper<S /* extends Schema.Schema */> {
 }
 
 export const definition = <State>(defaultValue: State | undefined = undefined) => {
-  return new DefinitionWrapper<{state: State, reducerPayload: {}, combines: {}}>({
+  return new DefinitionWrapper<{state: State, reducerPayload: {}, actions: {}, combines: {}}>({
     reducers: {},
+    actions: {},
     default: defaultValue,
     combines: {},
     list: undefined
@@ -77,10 +97,11 @@ export const list = <S extends Schema.Schema>(
   key: (item: Schema.State<S>) => string,
   defaultValue: Schema.State<S>[] | undefined = undefined
 ) => {
-  return new DefinitionWrapper<{state: Schema.State<S>[], reducerPayload: {}, combines: {}, listOf: S}>({
+  return new DefinitionWrapper<{state: Schema.State<S>[], reducerPayload: {}, combines: {}, actions: {}, listOf: S}>({
     default: defaultValue,
     combines: {},
     reducers: {},
+    actions: {},
     list: {
       of: of.definition,
       key

@@ -1,21 +1,6 @@
 import * as Schema from './schema';
 import { Definition, DefinitionWrapper } from './definition';
-
-export type ActionCreators<S /* extends Schema.Schema */> = {
-  [K in keyof Schema.ReducerPayload<S>]: (payload: Schema.ReducerPayload<S>[K]) => {
-    type: string,
-    payload: Schema.ReducerPayload<S>[K],
-    context: any,
-  }
-} & {
-  [K in keyof Schema.Combines<S>]: ActionCreators<Schema.Combines<S>[K]>
-} & ListActionCreators<S>;
-
-type ListActionCreators<S /* extends Schema.Schema */> =
-  [Schema.ListOf<S>] extends [never] ? {} :
-  {
-    (item: string | Schema.State<Schema.ListOf<S>>): ActionCreators<Schema.ListOf<S>>
-  };
+import { ActionCreators } from './actionCreators';
 
 type BaseState<S /* extends Schema.Schema */> =
   {} extends Schema.Combines<S> ? Schema.State<S> :
@@ -87,6 +72,7 @@ const createImpl = <FullState, S /* extends Schema.Schema */>(
   const actionCreatorPrototype = {};
   const reducers: {[key: string]: Reducer<FullState, {payload: any, context: any}>} = {};
 
+  Object.assign(actionCreatorPrototype, definition.actions);
   for (const name in definition.reducers) {
     const actionType = actionNamePrefix + name;
     Object.assign(actionCreatorPrototype, {

@@ -18,13 +18,21 @@ const accessToken = definition<string | undefined>();
 const visibilityFilter = definition<'SHOW_ALL' | 'SHOW_OPEN'>('SHOW_ALL').use(replaceReducer);
 
 const comment = definition<Comment>().use(objectReducers);
-const comments = list(comment, c => c.id).use(listReducers);
+const comments = list(comment, c => c.id).use(listReducers).addActionCreators({
+  fetch: function(dataSource: (todoID: string) => Comment[]) {
+    return this.replace(dataSource(this.actionContext.todos));
+  }
+});
 const todo = definition<Todo>().
   combineWith({comments}).
   addReducers({
     setCompleted: (t: Todo, completed: boolean) => ({...t, completed}),
   });
-const todos = list(todo, t => t.id, []).use(listReducers);
+const todos = list(todo, t => t.id, []).use(listReducers).addActionCreators({
+  fetch: function (dataSource: () => Todo[]) {
+    return this.replace(dataSource());
+  }
+});
 
 const reduxDefinition = combine({
   accessToken,
@@ -33,7 +41,6 @@ const reduxDefinition = combine({
 });
 
 const { reduce, Actions } = create(reduxDefinition);
-
 describe('Action shapes', () => {
   test('top-level replace', () => {
     const action = Actions.visibilityFilter.replace("SHOW_OPEN");
@@ -152,4 +159,45 @@ describe('Nested lists', () => {
     expect(store.getState().todos).toEqual([{...tasks[0], comments: [{id: "6", message: "Hi"}]}, tasks[1]]);
   });
 
+});
+
+describe('Custom actions', () => {
+  const store: Store<State<typeof reduxDefinition>> = createStore(reduce);
+  const tasks = [
+    {id: "4", text: "Test things", completed: false},
+    {id: "5", text: "Test more", completed: false},
+    {id: "6", text: "Test even more", completed: false},
+  ];
+
+  test('basic', () => {
+    Actions.todos.fetch(() => tasks.slice(0,2));
+    store.dispatch(Actions.todos.fetch(() => tasks.slice(0,2)));
+    expect(store.getState().todos).toEqual(tasks.slice(0,2));
+  });
+
+  test('nested', () => {
+    const commentDataSource = (id: string): Comment[] => [
+      {id: `${id}_1`, message: `I like to ${tasks.find(t => t.id == id)!.text.toLowerCase()}`}
+    ];
+    store.dispatch(Actions.todos("4").comments.fetch(commentDataSource));
+    expect(store.getState().todos).toEqual([
+      {
+        ...tasks[0],
+        comments: [{id: "4_1", message: "I like to test things"}]
+      },
+      tasks[1]
+    ]);
+
+    store.dispatch(Actions.todos("5").comments.fetch(commentDataSource));
+    expect(store.getState().todos).toEqual([
+      {
+        ...tasks[0],
+        comments: [{id: "4_1", message: "I like to test things"}]
+      },
+      {
+        ...tasks[1],
+        comments: [{id: "5_1", message: "I like to test more"}]
+      }
+    ]);
+  });
 });
