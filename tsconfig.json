@@ -4,13 +4,14 @@
     "outDir": "./dist/",
     "noImplicitAny": true,
     "module": "commonjs",
-    "lib": ["ES2015", "DOM"],
+    "lib": ["ES2015", "dom"],
     "jsx": "react",
     "target": "es5",
     "declaration": true,
     "strict": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": ["jest", "node"]
   },
   "compileOnSave": true
 }

@@ -1,10 +1,13 @@
 {
   "name": "redux-compact",
-  "version": "0.0.1-alpha.0",
+  "version": "0.1.0-beta.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "prebuild": "rm -rf dist",
+    "build": "tsc",
+    "postbuild": "cp package.json dist"
   },
   "repository": {
     "type": "git",
@@ -19,6 +22,7 @@
   "devDependencies": {
     "@types/jest": "^24.0.11",
     "@types/redux": "^3.6.0",
+    "conditional-type-checks": "^1.0.0",
     "jest": "^24.5.0",
     "redux": "^4.0.1",
     "ts-jest": "^24.0.1",

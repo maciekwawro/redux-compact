@@ -1,12 +1,13 @@
 import { createStore, Store } from 'redux';
 
-import { definition, list, combine, create, State } from '../';
-import { listReducers, replaceReducer, objectReducers } from '../lib/plugins';
+import { definition, list, combine, create, StateOf } from '../';
+import { listReducers, replaceReducer, objectReducers } from '../plugins';
 
 type Todo = {
   id: string,
   text: string,
-  completed: boolean
+  completed: boolean,
+  comments?: Comment[],
 };
 
 type Comment = {
@@ -17,18 +18,24 @@ type Comment = {
 const accessToken = definition<string | undefined>();
 const visibilityFilter = definition<'SHOW_ALL' | 'SHOW_OPEN'>('SHOW_ALL').use(replaceReducer);
 
-const comment = definition<Comment>().use(objectReducers);
-const comments = list(comment, c => c.id).use(listReducers).addActionCreators({
+const comment = definition<Comment>().use(objectReducers).addReducers({
+  wrap: (comment, prefix: string, suffix: string) => ({
+    ...comment,
+    message: `${prefix}${comment.message}${suffix}`
+  })
+});
+const comments = list({of: comment, key: c => c.id}).use(listReducers).use(replaceReducer).addActionCreators({
   fetch: function(dataSource: (todoID: string) => Comment[]) {
-    return this.replace(dataSource(this.actionContext.todos));
+    return this.replace(dataSource(this.actionContext.todo));
   }
 });
+
 const todo = definition<Todo>().
-  combineWith({comments}).
+  defineSlice("comments", comments).
   addReducers({
     setCompleted: (t: Todo, completed: boolean) => ({...t, completed}),
   });
-const todos = list(todo, t => t.id, []).use(listReducers).addActionCreators({
+const todos = list({of: todo, key: t => t.id, contextName: 'todo'}, []).use(listReducers).use(replaceReducer).addActionCreators({
   fetch: function (dataSource: () => Todo[]) {
     return this.replace(dataSource());
   }
@@ -41,42 +48,54 @@ const reduxDefinition = combine({
 });
 
 const { reduce, Actions } = create(reduxDefinition);
+
 describe('Action shapes', () => {
   test('top-level replace', () => {
     const action = Actions.visibilityFilter.replace("SHOW_OPEN");
     expect(action).toEqual({
-      type: "actions_visibilityFilter_replace",
-      payload: "SHOW_OPEN",
+      type: "action_visibilityFilter_replace",
+      args: ["SHOW_OPEN"],
       context: {}
     });
   });
   test('list item custom reducer', () => {
-    const action = Actions.todos("4").setCompleted(true);
+    const action = Actions.todos.$item("4").setCompleted(true);
     expect(action).toEqual({
-      type: "actions_todos_item_setCompleted",
-      payload: true,
+      type: "action_todos_item_setCompleted",
+      args: [true],
       context: {
-        todos: "4"
+        todo: "4"
       }
     });
   });
   test('nested list item update', () => {
-    const action = Actions.todos("4").comments("5").update({message: "Test"});
+    const action = Actions.todos.$item("4").comments.$item("5").update({message: "Test"});
     expect(action).toEqual({
-      type: "actions_todos_item_comments_item_update",
-      payload: {
+      type: "action_todos_item_comments_item_update",
+      args: [{
         message: "Test"
-      },
+      }],
       context: {
-        todos: "4",
-        comments: "5"
+        todo: "4",
+        action_todos_item_comments_item: "5"
+      }
+    });
+  });
+  test('nested list item multiarg', () => {
+    const action = Actions.todos.$item("4").comments.$item("5").wrap("[ ", " ]");
+    expect(action).toEqual({
+      type: "action_todos_item_comments_item_wrap",
+      args: ["[ "," ]"],
+      context: {
+        todo: "4",
+        action_todos_item_comments_item: "5"
       }
     });
   });
 });
 
 describe('Basic', () => {
-  const store: Store<State<typeof reduxDefinition>> = createStore(reduce);
+  const store: Store<StateOf<typeof reduxDefinition>> = createStore(reduce);
 
   test('default state', () => {
     expect(store.getState()).toEqual({
@@ -96,7 +115,7 @@ describe('Basic', () => {
   // test('nested')
 });
 describe('Lists', () => {
-  const store: Store<State<typeof reduxDefinition>> = createStore(reduce);
+  const store: Store<StateOf<typeof reduxDefinition>> = createStore(reduce);
 
   const tasks = [
     {id: "4", text: "Test things", completed: false},
@@ -114,9 +133,9 @@ describe('Lists', () => {
   });
 
   test('updateItem', () => {
-    store.dispatch(Actions.todos("6").setCompleted(true));
+    store.dispatch(Actions.todos.$item("6").setCompleted(true));
     expect(store.getState().todos).toEqual([tasks[0], tasks[1], {...tasks[2], completed: true}]);
-    store.dispatch(Actions.todos(tasks[2]).setCompleted(false));
+    store.dispatch(Actions.todos.$item(tasks[2]).setCompleted(false));
     expect(store.getState().todos).toEqual(tasks.slice(0,3));
   });
 
@@ -129,7 +148,7 @@ describe('Lists', () => {
 });
 
 describe('Nested lists', () => {
-  const store: Store<State<typeof reduxDefinition>> = createStore(reduce);
+  const store: Store<StateOf<typeof reduxDefinition>> = createStore(reduce);
 
   const tasks = [
     {id: "4", text: "Test things", completed: false},
@@ -145,24 +164,27 @@ describe('Nested lists', () => {
 
   test('replace', () => {
     expect(store.getState().todos).toEqual(tasks.slice(0,2));
-    store.dispatch(Actions.todos("4").comments.replace([]));
+    // store.dispatch(Actions.todos.$item("4").comments.remove("3"));
+    // store.dispatch(Actions.todos.$item("4").comments.push({id: "1", message: "Hi"}));
+    store.dispatch(Actions.todos.$item("4").comments.replace([]));
+    // store.dispatch(Actions.todos.$item("4").comments.remove("3"));
     expect(store.getState().todos).toEqual([{...tasks[0], comments: []}, tasks[1]]);
   });
 
   test('push', () => {
-    store.dispatch(Actions.todos("4").comments.push({id: "6", message: "Hello"}));
+    store.dispatch(Actions.todos.$item("4").comments.push({id: "6", message: "Hello"}));
     expect(store.getState().todos).toEqual([{...tasks[0], comments: [{id: "6", message: "Hello"}]}, tasks[1]]);
   });
 
   test('update', () => {
-    store.dispatch(Actions.todos("4").comments("6").update({message: "Hi"}));
+    store.dispatch(Actions.todos.$item("4").comments.$item("6").update({message: "Hi"}));
     expect(store.getState().todos).toEqual([{...tasks[0], comments: [{id: "6", message: "Hi"}]}, tasks[1]]);
   });
 
 });
 
 describe('Custom actions', () => {
-  const store: Store<State<typeof reduxDefinition>> = createStore(reduce);
+  const store: Store<StateOf<typeof reduxDefinition>> = createStore(reduce);
   const tasks = [
     {id: "4", text: "Test things", completed: false},
     {id: "5", text: "Test more", completed: false},
@@ -179,7 +201,7 @@ describe('Custom actions', () => {
     const commentDataSource = (id: string): Comment[] => [
       {id: `${id}_1`, message: `I like to ${tasks.find(t => t.id == id)!.text.toLowerCase()}`}
     ];
-    store.dispatch(Actions.todos("4").comments.fetch(commentDataSource));
+    store.dispatch(Actions.todos.$item("4").comments.fetch(commentDataSource));
     expect(store.getState().todos).toEqual([
       {
         ...tasks[0],
@@ -188,7 +210,7 @@ describe('Custom actions', () => {
       tasks[1]
     ]);
 
-    store.dispatch(Actions.todos("5").comments.fetch(commentDataSource));
+    store.dispatch(Actions.todos.$item("5").comments.fetch(commentDataSource));
     expect(store.getState().todos).toEqual([
       {
         ...tasks[0],
@@ -197,6 +219,17 @@ describe('Custom actions', () => {
       {
         ...tasks[1],
         comments: [{id: "5_1", message: "I like to test more"}]
+      }
+    ]);
+  });
+
+  test('multi-arg', () => {
+    store.dispatch(Actions.todos.remove("4"));
+    store.dispatch(Actions.todos.$item("5").comments.$item("5_1").wrap("[ ", " ]"));
+    expect(store.getState().todos).toEqual([
+      {
+        ...tasks[1],
+        comments: [{id: "5_1", message: "[ I like to test more ]"}]
       }
     ]);
   });
