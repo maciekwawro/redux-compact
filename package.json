@@ -1,13 +1,14 @@
 {
   "name": "redux-compact",
   "version": "0.1.0-beta.0",
-  "description": "",
+  "description": "Action creator creator",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
     "test": "jest",
     "prebuild": "rm -rf dist",
     "build": "tsc",
-    "postbuild": "cp package.json dist"
+    "postbuild": "cp package.json dist && cp README.md dist"
   },
   "repository": {
     "type": "git",

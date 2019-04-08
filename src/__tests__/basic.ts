@@ -1,7 +1,7 @@
 import { createStore, Store } from 'redux';
 
-import { definition, list, combine, create, StateOf } from '../';
-import { listReducers, replaceReducer, objectReducers } from '../plugins';
+import { definition, list, nullableList, combine, create, StateOf } from '../';
+import { listReducers, setValueReducer, objectReducers } from '../plugins';
 
 type Todo = {
   id: string,
@@ -16,7 +16,7 @@ type Comment = {
 };
 
 const accessToken = definition<string | undefined>();
-const visibilityFilter = definition<'SHOW_ALL' | 'SHOW_OPEN'>('SHOW_ALL').use(replaceReducer);
+const visibilityFilter = definition<'SHOW_ALL' | 'SHOW_OPEN'>().setDefault('SHOW_ALL').use(setValueReducer);
 
 const comment = definition<Comment>().use(objectReducers).addReducers({
   wrap: (comment, prefix: string, suffix: string) => ({
@@ -24,25 +24,23 @@ const comment = definition<Comment>().use(objectReducers).addReducers({
     message: `${prefix}${comment.message}${suffix}`
   })
 });
-const comments = list({of: comment, key: c => c.id}).use(listReducers).use(replaceReducer).addActionCreators({
+const comments = nullableList({of: comment, key: c => c.id}, undefined).use(listReducers).use(setValueReducer).addActionCreators({
   fetch: function(dataSource: (todoID: string) => Comment[]) {
-    return this.replace(dataSource(this.actionContext.todo));
+    return this.setValue(dataSource(this.$context.todo));
   }
 });
 
 const todo = definition<Todo>().
   defineSlice("comments", comments).
-  addReducers({
-    setCompleted: (t: Todo, completed: boolean) => ({...t, completed}),
-  });
-const todos = list({of: todo, key: t => t.id, contextName: 'todo'}, []).use(listReducers).use(replaceReducer).addActionCreators({
+  addReducers({ setCompleted: (t: Todo, completed: boolean) => ({...t, completed}) });
+const todos = list({of: todo, key: t => t.id, contextName: 'todo'}).use(listReducers).use(setValueReducer).addActionCreators({
   fetch: function (dataSource: () => Todo[]) {
-    return this.replace(dataSource());
+    return this.setValue(dataSource());
   }
 });
 
 const reduxDefinition = combine({
-  accessToken,
+  accessToken: accessToken.setDefault(undefined),
   visibilityFilter,
   todos
 });
@@ -50,10 +48,10 @@ const reduxDefinition = combine({
 const { reduce, Actions } = create(reduxDefinition);
 
 describe('Action shapes', () => {
-  test('top-level replace', () => {
-    const action = Actions.visibilityFilter.replace("SHOW_OPEN");
+  test('top-level setValue', () => {
+    const action = Actions.visibilityFilter.setValue("SHOW_OPEN");
     expect(action).toEqual({
-      type: "action_visibilityFilter_replace",
+      type: "action_visibilityFilter_setValue",
       args: ["SHOW_OPEN"],
       context: {}
     });
@@ -104,8 +102,8 @@ describe('Basic', () => {
       todos: []
     });
   });
-  test('replace action reducer', () => {
-    store.dispatch(Actions.visibilityFilter.replace("SHOW_OPEN"));
+  test('setValue action reducer', () => {
+    store.dispatch(Actions.visibilityFilter.setValue("SHOW_OPEN"));
     expect(store.getState()).toEqual({
       accessToken: undefined,
       visibilityFilter: 'SHOW_OPEN',
@@ -123,12 +121,14 @@ describe('Lists', () => {
     {id: "6", text: "Test even more", completed: false},
   ];
 
-  test('push', () => {
-    store.dispatch(Actions.todos.push(tasks[0]));
+  test('pushOrReplace', () => {
+    store.dispatch(Actions.todos.pushOrReplace({...tasks[0], text: 'TBA'}));
+    expect(store.getState().todos).toEqual([{...tasks[0], text: 'TBA'}]);
+    store.dispatch(Actions.todos.pushOrReplace(tasks[0]));
     expect(store.getState().todos).toEqual([tasks[0]]);
-    store.dispatch(Actions.todos.push(tasks[1]));
+    store.dispatch(Actions.todos.pushOrReplace(tasks[1]));
     expect(store.getState().todos).toEqual(tasks.slice(0,2));
-    store.dispatch(Actions.todos.push(tasks[2]));
+    store.dispatch(Actions.todos.pushOrReplace(tasks[2]));
     expect(store.getState().todos).toEqual(tasks.slice(0,3));
   });
 
@@ -157,22 +157,22 @@ describe('Nested lists', () => {
   ];
 
   beforeAll(() => {
-    store.dispatch(Actions.todos.push(tasks[0]));
-    store.dispatch(Actions.todos.push(tasks[1]));
+    store.dispatch(Actions.todos.pushOrReplace(tasks[0]));
+    store.dispatch(Actions.todos.pushOrReplace(tasks[1]));
     expect(store.getState().todos).toEqual(tasks.slice(0,2));
   })
 
-  test('replace', () => {
+  test('setValue', () => {
     expect(store.getState().todos).toEqual(tasks.slice(0,2));
     // store.dispatch(Actions.todos.$item("4").comments.remove("3"));
-    // store.dispatch(Actions.todos.$item("4").comments.push({id: "1", message: "Hi"}));
-    store.dispatch(Actions.todos.$item("4").comments.replace([]));
+    // store.dispatch(Actions.todos.$item("4").comments.pushOrReplace({id: "1", message: "Hi"}));
+    store.dispatch(Actions.todos.$item("4").comments.setValue([]));
     // store.dispatch(Actions.todos.$item("4").comments.remove("3"));
     expect(store.getState().todos).toEqual([{...tasks[0], comments: []}, tasks[1]]);
   });
 
-  test('push', () => {
-    store.dispatch(Actions.todos.$item("4").comments.push({id: "6", message: "Hello"}));
+  test('pushOrReplace', () => {
+    store.dispatch(Actions.todos.$item("4").comments.pushOrReplace({id: "6", message: "Hello"}));
     expect(store.getState().todos).toEqual([{...tasks[0], comments: [{id: "6", message: "Hello"}]}, tasks[1]]);
   });
 

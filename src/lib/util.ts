@@ -1,5 +1,5 @@
-export const mapValues = <K extends string,T,R>(input: {[key in K]: T}, fn: (val: T) => R): {[key in K]: R} => {
-  const result: {[key in K]: R} = {} as any;
+export const mapValues = <K extends string,T,R>(input: Record<K,T>, fn: (val: T) => R): Record<K,R> => {
+  const result: Record<K,R> = {} as Record<K,R>;
   for (const key in input) {
     result[key] = fn(input[key]);
   }
